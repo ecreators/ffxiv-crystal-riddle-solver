@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * @author Bjoern Frohberg, mydata GmbH
  */
-public interface ISolverResultCallback {
+public interface ISolverResultCallback<T> {
 	
-	void onResult(ClockField foundStart, List<Move> foundRoute);
+	void onResult(SequenceInputSolver<T> tKeySequenceInputSolver, SequenceInput<T> foundStart, List<T> foundRoute);
 }
