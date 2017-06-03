@@ -155,7 +155,6 @@ public abstract class SequenceInputSolver<TKey> implements Runnable {
 			indeces.add(info.index);
 			info = info.moveTo(choice);
 		}
-		indeces.add(info.index);
 		return indeces;
 	}
 	

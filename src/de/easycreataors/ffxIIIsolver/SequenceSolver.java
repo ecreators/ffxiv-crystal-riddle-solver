@@ -78,8 +78,8 @@ public abstract class SequenceSolver<TKey> {
 	
 	@SuppressWarnings("unused")
 	protected void onInputSolved(SequenceInputSolver<TKey> sender, SequenceInput<TKey> input, List<TKey> input_solution) {
-		List<Integer> inices = sender.listRoute(input_solution);
-		System.out.println("Done: " + name + " " + Arrays.toString(sequence.stream().mapToInt(i -> i).toArray()) + " = " + inices.toString());
+		List<Integer> indices = sender.listRoute(input_solution);
+		System.out.println("Done: " + name + " " + Arrays.toString(sequence.stream().mapToInt(i -> i).toArray()) + " = " + indices.toString());
 	}
 	
 	protected int getNext(SequenceInput<TKey> field, TKey dir) {
