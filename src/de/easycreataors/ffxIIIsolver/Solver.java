@@ -62,6 +62,11 @@ public class Solver implements Runnable {
 			}
 			
 			if(choice == null) {
+				// FIX #1
+				if(countTaken(true) == start.fullClockCount) {
+					success();
+					return;
+				}
 				ClockFieldInfo old = info;
 				info = info.comefrom;
 				// revidieren
@@ -85,6 +90,10 @@ public class Solver implements Runnable {
 	private boolean singleUntakenField(ClockFieldInfo info) {
 		List<ClockFieldInfo> untakenInfos = takenInfo.values().stream().filter(i -> !i.taken).collect(Collectors.toList());
 		return untakenInfos.size() == 1 && untakenInfos.get(0).field.index == info.field.index;
+	}
+	
+	private int countTaken(boolean takenState) {
+		return (int) takenInfo.values().stream().filter(i -> i.taken == takenState).count();
 	}
 	
 	private void success() {
