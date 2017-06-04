@@ -13,6 +13,7 @@ import java.util.List;
 /**
  * @author Bjoern Frohberg, mydata GmbH
  */
+@SuppressWarnings("WeakerAccess")
 public class SequenceDecoder {
 	
 	private       Sequence                         sequence;
@@ -30,7 +31,7 @@ public class SequenceDecoder {
 		Pin[] sequence = new Pin[pins.length];
 		for (int i = 0; i < pins.length; i++) {
 			Input pin = pins[i];
-			sequence[i] = new Pin(i, pin);
+			sequence[i] = new Pin(pin);
 		}
 		this.sequence = new Sequence(System.currentTimeMillis(), sequence);
 	}
@@ -137,13 +138,12 @@ public class SequenceDecoder {
 	
 	private static Input determineOption(List<Input> current_route, Pin current) {
 		Input option = null;
-		foundOption:
 		for (Input input : current.getInput().getOptions()) {
 			// ungone und untaken
 			if(!current_route.contains(input) && !current.getTakenInputs().contains(input)) {
 				// can go
 				option = input;
-				break foundOption;
+				break;
 			}
 		}
 		return option;
@@ -151,15 +151,13 @@ public class SequenceDecoder {
 	
 	public static class Pin {
 		
-		private final int         index;
 		private final Input       input;
 		private final List<Input> takenInputs;
 		private       Pin         previous;
 		boolean     done;
 		List<Input> route;
 		
-		public Pin(int index, Input input) {
-			this.index = index;
+		public Pin(Input input) {
 			this.input = input;
 			this.takenInputs = new ArrayList<>();
 		}
@@ -170,10 +168,6 @@ public class SequenceDecoder {
 		
 		public Pin getPrevious() {
 			return previous;
-		}
-		
-		public int getIndex() {
-			return index;
 		}
 		
 		public Input getInput() {
@@ -190,6 +184,7 @@ public class SequenceDecoder {
 		}
 	}
 	
+	@SuppressWarnings("unused")
 	public static class Input {
 		
 		private final List<Input> options;

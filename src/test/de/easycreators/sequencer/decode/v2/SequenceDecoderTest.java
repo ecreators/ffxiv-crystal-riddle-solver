@@ -22,16 +22,25 @@ public class SequenceDecoderTest {
 		Input[]         fields  = defineFields(2, 2, 2, 2, 2);
 		decoder.setSequence(fields);
 		
-		List<int[]> solutions = new ArrayList<>();
+		//noinspection MismatchedQueryAndUpdateOfCollection
+		List<int[]> results = new ArrayList<>();
+		
+		// handle results
 		decoder.getDecodingCompletedEvent().addListener(sq -> {
 			// Auswertung
 			for (SequenceDecoder.Pin pin : sq.getDonePins()) {
-				List<Input> r = pin.getRoute();
-				if(r != null && !r.isEmpty()) {
-					MoveInput[] route = r.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
-					solutions.add(Arrays.stream(route).mapToInt(MoveInput::getIndex).toArray());
+				List<Input> raw_route = pin.getRoute();
+				if(raw_route != null && !raw_route.isEmpty()) {
+					// cast
+					MoveInput[] route = raw_route.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
+					
+					// recognize result
+					results.add(Arrays.stream(route).mapToInt(MoveInput::getIndex).toArray());
+					
+					// debug
 					System.out.println(Arrays.toString(route));
 				} else {
+					// debug
 					System.out.println("No result!");
 				}
 			}
