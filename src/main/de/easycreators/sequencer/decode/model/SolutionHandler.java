@@ -1,4 +1,4 @@
-package java.ffxIIIsolver.decode.model;
+package de.easycreators.sequencer.decode.model;
 
 /**
  * @author Bjoern Frohberg, mydata GmbH

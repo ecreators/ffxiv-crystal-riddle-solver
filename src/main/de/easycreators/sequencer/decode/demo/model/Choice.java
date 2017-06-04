@@ -1,4 +1,4 @@
-package java.ffxIIIsolver.decode.demo.model;
+package de.easycreators.sequencer.decode.demo.model;
 
 import java.util.Arrays;
 import java.util.Random;

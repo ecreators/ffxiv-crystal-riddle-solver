@@ -1,7 +1,7 @@
-package java.ffxIIIsolver.decode.demo;
+package de.easycreators.sequencer.decode.demo;
 
-import java.ffxIIIsolver.decode.SequenceDecoder;
-import java.ffxIIIsolver.decode.demo.model.Choice;
+import de.easycreators.sequencer.decode.SequenceDecoder;
+import de.easycreators.sequencer.decode.demo.model.Choice;
 
 /**
  * @author Bjoern Frohberg, mydata GmbH

@@ -1,7 +1,8 @@
-package java.ffxIIIsolver.decode;
+package de.easycreators.sequencer.decode;
 
-import java.ffxIIIsolver.decode.model.IMoveChoiceModificator;
-import java.ffxIIIsolver.decode.model.SolutionHandler;
+import de.easycreators.sequencer.decode.model.IMoveChoiceModificator;
+import de.easycreators.sequencer.decode.model.SolutionHandler;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;

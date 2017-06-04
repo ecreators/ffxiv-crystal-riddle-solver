@@ -1,7 +1,8 @@
-package java.ffxIIIsolver.decode.model;
+package de.easycreators.sequencer.decode.model;
 
-import java.ffxIIIsolver.decode.SequenceInput;
-import java.ffxIIIsolver.decode.SequenceNodeSolver;
+import de.easycreators.sequencer.decode.SequenceInput;
+import de.easycreators.sequencer.decode.SequenceNodeSolver;
+
 import java.util.List;
 
 /**

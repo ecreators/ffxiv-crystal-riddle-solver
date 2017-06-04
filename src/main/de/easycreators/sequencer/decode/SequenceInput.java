@@ -1,4 +1,4 @@
-package java.ffxIIIsolver.decode;
+package de.easycreators.sequencer.decode;
 
 import java.util.HashMap;
 import java.util.Map;

@@ -1,7 +1,8 @@
-package java.ffxIIIsolver.decode;
+package de.easycreators.sequencer.decode;
 
-import java.ffxIIIsolver.decode.model.SolutionHandler;
-import java.ffxIIIsolver.encode.SequenceEncoder;
+import de.easycreators.sequencer.decode.model.SolutionHandler;
+import de.easycreators.sequencer.encode.SequenceEncoder;
+
 import java.util.*;
 
 import static java.util.stream.Collectors.toList;

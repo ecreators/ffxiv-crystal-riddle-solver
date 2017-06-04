@@ -1,4 +1,4 @@
-package java.ffxIIIsolver.encode;
+package de.easycreators.sequencer.encode;
 
 import org.junit.After;
 import org.junit.Before;
