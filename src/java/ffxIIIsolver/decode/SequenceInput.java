@@ -1,4 +1,4 @@
-package de.easycreataors.ffxIIIsolver;
+package java.ffxIIIsolver.decode;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -13,13 +13,13 @@ public class SequenceInput<TKey> {
 	public final  int                                   index;
 	public final  Map<TKey, SequenceInput<TKey>>        next;
 	public final  int                                   input_count;
-	private final Function<SequenceInput<TKey>, TKey[]> choices;
+	private final Function<SequenceInput<TKey>, TKey[]> choicesGetter;
 	
-	public SequenceInput(int move, int index, int input_count, Function<SequenceInput<TKey>, TKey[]> choices) {
+	public SequenceInput(int move, int index, int input_count, Function<SequenceInput<TKey>, TKey[]> choicesGetter) {
 		this.move = move;
 		this.index = index;
 		this.input_count = input_count;
-		this.choices = choices;
+		this.choicesGetter = choicesGetter;
 		this.next = new HashMap<>();
 	}
 	
@@ -37,7 +37,7 @@ public class SequenceInput<TKey> {
 		return obj instanceof SequenceInput && obj.hashCode() == hashCode();
 	}
 	
-	public TKey[] choices() {
-		return choices.apply(this);
+	public TKey[] getChoices() {
+		return choicesGetter.apply(this);
 	}
 }

@@ -1,7 +1,8 @@
-package de.easycreataors.ffxIIIsolver;
+package java.ffxIIIsolver.decode;
 
+import java.ffxIIIsolver.decode.model.SolutionHandler;
+import java.ffxIIIsolver.encode.SequenceEncoder;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.stream.Collectors.toList;
 
@@ -9,24 +10,28 @@ import static java.util.stream.Collectors.toList;
  * @author Bjoern Frohberg, mydata GmbH
  */
 @SuppressWarnings("WeakerAccess")
-public abstract class SequenceInputSolver<TKey> implements Runnable {
+public class SequenceNodeSolver<TKey> implements Runnable {
 	
 	private static final Random RANDOM = new Random(System.currentTimeMillis());
-	private final AtomicReference<SequenceInputSolver<TKey>> solution;
-	private final String                                     name;
-	private final SequenceInput<TKey>                        input;
-	private final ISolverResultCallback<TKey>                solverResultCallback;
-	private final Map<Integer, SequenceUsedInfo<TKey>>       takenInfo;
+	private final SolutionHandler<SequenceNodeSolver<TKey>> solutionCallback;
+	private final SequenceInput<TKey>                       input;
+	private final Map<Integer, SequenceUsedInfo<TKey>>      takenInfo;
+	private final List<Integer>                             fields;
+	public        List<TKey>                                route;
+	private       boolean                                   done;
 	
-	protected SequenceInputSolver(AtomicReference<SequenceInputSolver<TKey>> solutionOut, String name, SequenceInput<TKey> input, List<SequenceInput<TKey>> fields, ISolverResultCallback<TKey> solverResultCallback) {
-		this.solution = solutionOut;
-		this.name = name;
+	public SequenceNodeSolver(SolutionHandler<SequenceNodeSolver<TKey>> solutionOut, SequenceInput<TKey> input, List<SequenceInput<TKey>> fields) {
+		this.solutionCallback = solutionOut;
 		this.input = input;
-		this.solverResultCallback = solverResultCallback;
+		this.fields = fields.stream().map(f -> f.move).collect(toList());
 		takenInfo = new HashMap<>();
 		for (SequenceInput<TKey> field : fields) {
 			takenInfo.put(field.index, new SequenceUsedInfo<>(field));
 		}
+	}
+	
+	public final boolean isDone() {
+		return done;
 	}
 	
 	@Override
@@ -50,16 +55,20 @@ public abstract class SequenceInputSolver<TKey> implements Runnable {
 		do {
 			// wieder am Anfang
 			if(info == null) {
-//				System.out.println(String.takenFormat("FAILED at index %d=%d", input.index, input.move));
-				failAll();
+				done = true;
+				onFail();
 				return;
 			}
 			taken.add(info.field);
 			
 			// bestimme die nächste Entscheidung
-			Map<TKey, SequenceUsedInfo<TKey>> choices = new HashMap<>();
-			SequenceUsedInfo<TKey>            current = info;
-			Arrays.stream(info.field.choices()).forEach(option -> choices.put(option, takenInfo.get(current.field.next.get(option).index)));
+			Map<TKey, SequenceUsedInfo<TKey>> choices    = new HashMap<>();
+			SequenceUsedInfo<TKey>            current    = info;
+			TKey[]                            av_choices = info.field.getChoices();
+			if(av_choices == null) {
+				throw new IllegalArgumentException("At least you need to define a non null amount of choices. Even empty is ok!");
+			}
+			Arrays.stream(av_choices).forEach(option -> choices.put(option, takenInfo.get(current.field.next.get(option).index)));
 			
 			// Entscheidung treffen oder NULL
 			// Durch Zufall schneller sein
@@ -74,12 +83,12 @@ public abstract class SequenceInputSolver<TKey> implements Runnable {
 				if(taken.size() == input.input_count) {
 					//noinspection ConstantConditions
 					info.choice = getBeforeOrNull(taken).choice;
-					printUsed(taken, "!SOLVED");
 					List<TKey> route = new ArrayList<>();
 					for (SequenceInput<TKey> field : taken) {
 						SequenceUsedInfo<TKey> inf = takenInfo.get(field.index);
 						route.add(inf.choice);
 					}
+					done = true;
 					success(route);
 					return;
 				}
@@ -103,9 +112,9 @@ public abstract class SequenceInputSolver<TKey> implements Runnable {
 				SequenceUsedInfo<TKey> next = choices.get(choice);
 				info.choice = choice;
 				info = next;
-				printUsed(taken, "SOLVING");
 			}
-		} while (solution.get() == null);
+		} while (!solutionCallback.hasSolution());
+		done = true;
 	}
 	
 	private SequenceUsedInfo<TKey> getBeforeOrNull(List<SequenceInput<TKey>> taken) {
@@ -134,21 +143,43 @@ public abstract class SequenceInputSolver<TKey> implements Runnable {
 		return null;
 	}
 	
-	protected void printUsed(Collection<SequenceInput<TKey>> taken, String progress) {
-		System.out.println(progress + ": " + taken.stream().map(t -> format(takenInfo.get(t.index).choice, t)).collect(toList()));
+	protected void success(List<TKey> route) {
+		if(avoidNotUnique(route)) {
+			return;
+		}
+		onCleanedSuccess(route);
 	}
 	
-	protected abstract String format(TKey finalChoice, SequenceInput<TKey> t);
+	protected void onCleanedSuccess(List<TKey> route) {
+		this.route = route;
+		notifySolution();
+	}
 	
-	protected void success(List<TKey> route) {
-		solution.set(this);
-		listRoute(route);
-		if(solverResultCallback != null) {
-			solverResultCallback.onResult(this, input, route);
+	public final void notifySolution() {
+		if(solutionCallback != null) {
+			if(done && (route == null || isValidRoute(route))) {
+				solutionCallback.invoke(this);
+			}
 		}
 	}
 	
+	private boolean avoidNotUnique(List<TKey> route) {
+		if(!isValidRoute(route)) {
+			onFail();
+			return true;
+		}
+		return false;
+	}
+	
+	private boolean isValidRoute(List<TKey> route) {
+		List<Integer>   indices = listRoute(route);
+		SequenceEncoder encoder = new SequenceEncoder();
+		encoder.setFields(indices);
+		return encoder.encodeMoves().equals(fields);
+	}
+	
 	protected List<Integer> listRoute(List<TKey> route) {
+		this.route = route;
 		SequenceInput<TKey> info    = input;
 		List<Integer>       indeces = new ArrayList<>();
 		for (TKey choice : route) {
@@ -158,17 +189,14 @@ public abstract class SequenceInputSolver<TKey> implements Runnable {
 		return indeces;
 	}
 	
-	private void failAll() {
-	
+	private void onFail() {
+		route = null;
+		notifySolution();
 	}
 	
 	@SuppressWarnings("unused")
 	public SequenceInput<TKey> getInput() {
 		return input;
-	}
-	
-	public String getName() {
-		return name;
 	}
 	
 	private static class SequenceUsedInfo<TKey> {
@@ -191,7 +219,7 @@ public abstract class SequenceInputSolver<TKey> implements Runnable {
 		}
 		
 		public List<TKey> getUntakenChoices() {
-			return Arrays.stream(field.choices()).filter(this::canMoveTo).collect(toList());
+			return Arrays.stream(field.getChoices()).filter(this::canMoveTo).collect(toList());
 		}
 	}
 }
