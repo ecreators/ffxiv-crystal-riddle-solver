@@ -1,7 +1,8 @@
 package de.easycreators.sequencer.decode.demo;
 
-import de.easycreators.sequencer.decode.SequenceDecoder;
 import de.easycreators.sequencer.decode.demo.model.Choice;
+import de.easycreators.sequencer.decode.model.Resolution;
+import de.easycreators.sequencer.decode.v1.SequenceDecoder;
 
 /**
  * @author Bjoern Frohberg, mydata GmbH
@@ -15,9 +16,9 @@ public class Demo {
 	
 	private void start() {
 		SequenceDecoder<Choice> sequenceDecoder = new SequenceDecoder<>(Choice.values(), (dir, move) -> move * dir.f);
-		sequenceDecoder.setMode(SequenceDecoder.Resolution.EARLY_RESULT);
+		sequenceDecoder.setMode(Resolution.EARLY_RESULT);
 		sequenceDecoder.setSequence(2, 2, 2, 2, 2);
-		sequenceDecoder.solve();
+		sequenceDecoder.decode();
 	}
 	
 	/*

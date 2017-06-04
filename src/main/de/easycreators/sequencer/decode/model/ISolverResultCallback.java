@@ -1,7 +1,7 @@
 package de.easycreators.sequencer.decode.model;
 
-import de.easycreators.sequencer.decode.SequenceInput;
-import de.easycreators.sequencer.decode.SequenceNodeSolver;
+import de.easycreators.sequencer.decode.v1.SequenceInput;
+import de.easycreators.sequencer.decode.v1.SequenceNodeSolver;
 
 import java.util.List;
 

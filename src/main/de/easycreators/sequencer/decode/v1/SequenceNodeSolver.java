@@ -1,4 +1,4 @@
-package de.easycreators.sequencer.decode;
+package de.easycreators.sequencer.decode.v1;
 
 import de.easycreators.sequencer.decode.model.SolutionHandler;
 import de.easycreators.sequencer.encode.SequenceEncoder;
@@ -179,7 +179,7 @@ public class SequenceNodeSolver<TKey> implements Runnable {
 		return encoder.encodeMoves().equals(fields);
 	}
 	
-	protected List<Integer> listRoute(List<TKey> route) {
+	public List<Integer> listRoute(List<TKey> route) {
 		this.route = route;
 		SequenceInput<TKey> info    = input;
 		List<Integer>       indeces = new ArrayList<>();

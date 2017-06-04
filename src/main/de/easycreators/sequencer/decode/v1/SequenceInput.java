@@ -1,4 +1,4 @@
-package de.easycreators.sequencer.decode;
+package de.easycreators.sequencer.decode.v1;
 
 import java.util.HashMap;
 import java.util.Map;

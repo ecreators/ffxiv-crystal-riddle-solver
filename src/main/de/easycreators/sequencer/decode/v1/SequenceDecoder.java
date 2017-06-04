@@ -1,12 +1,13 @@
-package de.easycreators.sequencer.decode;
+package de.easycreators.sequencer.decode.v1;
 
+import de.easycreators.core.event.IListenerEvent;
+import de.easycreators.core.event.ListenerEvent;
+import de.easycreators.sequencer.decode.model.Handler;
 import de.easycreators.sequencer.decode.model.IMoveChoiceModificator;
+import de.easycreators.sequencer.decode.model.Resolution;
 import de.easycreators.sequencer.decode.model.SolutionHandler;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
@@ -17,22 +18,16 @@ import static java.util.Arrays.asList;
 /**
  * @author Bjoern Frohberg, mydata GmbH
  */
-@SuppressWarnings("WeakerAccess")
-public class SequenceDecoder<TKey> {
+@SuppressWarnings({"WeakerAccess"})
+public class SequenceDecoder<TKey> implements ISequenceDecoder {
 	
 	private final ExecutorService              pool;
 	private final TKey[]                       staticOptions;
 	private       List<Integer>                sequence;
 	private final IMoveChoiceModificator<TKey> offsetHandler;
 	private Resolution mode = Resolution.EARLY_RESULT;
-	
-	public SequenceDecoder() {
-		this(null, null);
-	}
-	
-	public SequenceDecoder(IMoveChoiceModificator<TKey> offsetHandler) {
-		this(null, offsetHandler);
-	}
+	private final ListenerEvent<Handler<List<SequenceNodeSolver<TKey>>>> solutionsEvent;
+	private final Map<Integer, List<SequenceNodeSolver<TKey>>>           results;
 	
 	public SequenceDecoder(TKey[] staticOptionsOrNull, IMoveChoiceModificator<TKey> offsetHandler) {
 		this.staticOptions = staticOptionsOrNull == null
@@ -40,15 +35,24 @@ public class SequenceDecoder<TKey> {
 		                     : Arrays.copyOf(staticOptionsOrNull, staticOptionsOrNull.length);
 		this.offsetHandler = offsetHandler;
 		this.pool = Executors.newCachedThreadPool();
+		this.solutionsEvent = new ListenerEvent<>();
+		this.results = new HashMap<>();
 	}
 	
+	@Override
 	public void setSequence(Integer... sequenceMoves) {
 		this.sequence = new ArrayList<>();
 		this.sequence.addAll(asList(sequenceMoves));
 		this.sequence = Collections.unmodifiableList(this.sequence);
 	}
 	
-	public void solve() {
+	@Override
+	public Awaiter decode() {
+		int                            id                = Arrays.hashCode(sequence.toArray());
+		List<SequenceNodeSolver<TKey>> resultsCollection = results.computeIfAbsent(id, k -> new ArrayList<>());
+		resultsCollection.clear();
+		Awaiter awaiter = new Awaiter(id, this);
+		
 		AtomicReference<SequenceNodeSolver<TKey>> firstSolution = new AtomicReference<>();
 		int                                       size          = sequence.size();
 		
@@ -81,23 +85,28 @@ public class SequenceDecoder<TKey> {
 						
 						boolean                        allDone   = Arrays.stream(nodes).allMatch(SequenceNodeSolver::isDone);
 						List<SequenceNodeSolver<TKey>> solutions = collectSolutions(nodes);
-						switch (mode) {
-							// stop at very first solution "not fail"
-							case EARLY_RESULT: {
-								if(node.route != null) {
-									firstSolution.set(node);
-									onSolutions(solutions);
-								} else if(allDone) {
-									onSolutions(solutions);
+						if(!solutions.isEmpty()) {
+							switch (mode) {
+								// stop at very first solution "not fail"
+								case EARLY_RESULT: {
+									if(node.route != null) {
+										resultsCollection.add(node);
+										firstSolution.set(node);
+										onSolutions(solutions);
+									} else if(allDone) {
+										onSolutions(solutions);
+									}
+									break;
 								}
-								break;
-							}
-							case ALL_RESULTS: {
-								if(allDone) {
-									firstSolution.set(solutions.stream().findFirst().orElse(null));
-									onSolutions(solutions);
+								case ALL_RESULTS: {
+									if(allDone) {
+										firstSolution.set(solutions.stream().findFirst().orElse(null));
+										resultsCollection.clear();
+										resultsCollection.addAll(solutions);
+										onSolutions(solutions);
+									}
+									break;
 								}
-								break;
 							}
 						}
 					}
@@ -113,6 +122,7 @@ public class SequenceDecoder<TKey> {
 				pool.execute(nodeSolver);
 			}
 		}
+		return awaiter;
 	}
 	
 	@SafeVarargs
@@ -127,22 +137,15 @@ public class SequenceDecoder<TKey> {
 	 */
 	@SuppressWarnings("unused")
 	protected void onSolutions(List<SequenceNodeSolver<TKey>> solutions) {
-	
+		notifySolutions(solutions);
 	}
 	
-	@SuppressWarnings("unused")
-	protected String takenFormat(TKey finalChoice, SequenceInput<TKey> t) {
-		return t.toString();
+	protected final void notifySolutions(List<SequenceNodeSolver<TKey>> solutions) {
+		solutionsEvent.invokeAll(h -> h.invoke(solutions));
 	}
 	
-	@SuppressWarnings("unused")
 	protected TKey[] getOptionsBySequenceInput(SequenceInput<TKey> field) {
 		return staticOptions;
-	}
-	
-	@SuppressWarnings("unused")
-	protected final void logResult(SequenceNodeSolver<TKey> sender, List<TKey> route) {
-		System.out.println("Done: " + Arrays.toString(sequence.stream().mapToInt(i -> i).toArray()) + " = " + sender.listRoute(route).toString());
 	}
 	
 	protected int getNext(SequenceInput<TKey> field, TKey dir) {
@@ -156,12 +159,33 @@ public class SequenceDecoder<TKey> {
 		       : offsetHandler.handleMoveByChoice(dir, move);
 	}
 	
+	@Override
 	public void setMode(Resolution mode) {
-		this.mode = mode;
+		this.mode = mode == null
+		            ? Resolution.EARLY_RESULT
+		            : mode;
 	}
 	
-	public enum Resolution {
-		ALL_RESULTS,
-		EARLY_RESULT
+	public IListenerEvent<Handler<List<SequenceNodeSolver<TKey>>>> getSolutionsEvent() {
+		return solutionsEvent;
 	}
+	
+	public final List<SequenceNodeSolver<TKey>> awaitSolutions() {
+		AtomicReference<List<SequenceNodeSolver<TKey>>>          results = new AtomicReference<>();
+		AtomicReference<Handler<List<SequenceNodeSolver<TKey>>>> onEnd   = new AtomicReference<>();
+		onEnd.set(r -> {
+			results.set(r);
+			getSolutionsEvent().removeListener(onEnd.get());
+		});
+		getSolutionsEvent().addListener(onEnd.get());
+		while (results.get() == null) {
+			Thread.yield();
+		}
+		return results.get();
+	}
+	
+	public List<SequenceNodeSolver<TKey>> getResults(int id) {
+		return results.get(id);
+	}
+	
 }
