@@ -64,22 +64,43 @@ public class SequenceDecoder {
 		if(sequence == null) {
 			return false;
 		} else if(sequence.done) {
-			decodingCompletedEvent.invokeAll(h -> h.invoke(sequence));
+			notifySequenceDone();
 			return true;
 		}
 		
-		// determineValidRoutes each pin
+		sequence.predictedPins = 0;
+		for (Pin pin : sequence.getPins()) {
+			for (Input ignored : pin.input.options) {
+				sequence.predictedPins++;
+			}
+		}
+		
 		for (Pin pin : sequence.getPins()) {
 			// stop asap with resolution EARLY, if a route was found
 			if(resolution != Resolution.EARLY_RESULT || !hasRouteFound()) {
 				// one solution a pin
-				solveFromPin(pin, resolution);
+				int i = 0;
+				do {
+					if(i > 0) {
+						pin = new Pin(pin.input);
+//						finalPins.add(pin);
+					}
+					solveFromPin(pin, resolution, i);
+					Pin finalPin = pin;
+//					if(sequence.donePins.stream().noneMatch(p -> p.input.equals(finalPin.input))) {
+//						sequence.donePins.add(pin);
+//					}
+					if(pin.route != null && pin.routes.stream().noneMatch(r -> r.equals(finalPin.route))) {
+						pin.routes.add(pin.route);
+					}
+				} while (i++ < pin.input.options.size());
 			}
 			// early stop
 			else {
 				break;
 			}
 		}
+//		sequence.pins = finalPins.toArray(new Pin[0]);
 		return true;
 	}
 	
@@ -88,7 +109,7 @@ public class SequenceDecoder {
 	 *                   each step in way finding
 	 * @param resolution Kind of stop type to reduce redundant iterations
 	 */
-	protected void solveFromPin(Pin start, Resolution resolution) {
+	protected void solveFromPin(Pin start, Resolution resolution, int optionOffset) {
 		// if started asnchron or parallel: stop this determineValidRoutes, if another determineValidRoutes found a route
 		if(shouldStop(resolution)) {
 			return;
@@ -98,7 +119,7 @@ public class SequenceDecoder {
 		start.route = null;
 		sequence.reset();
 		
-		Pin current = start;
+		Pin         current       = start;
 		List<Input> current_route = new ArrayList<>();
 		
 		outer:
@@ -126,7 +147,7 @@ public class SequenceDecoder {
 			}
 			
 			// where to go from this pin
-			List<Input> unchosenOptions = determineOptions(current_route, current);
+			List<Input> unchosenOptions = determineOptions(current_route, current, optionOffset);
 			// more than one option produce a new possible destiny
 			if(!unchosenOptions.isEmpty()) {
 				for (Input option : unchosenOptions) {
@@ -144,6 +165,9 @@ public class SequenceDecoder {
 						current_route.clear();
 						break outer; // do
 					}
+					
+					// stop first option
+					break;
 				}
 			}
 			// no option anymore
@@ -164,13 +188,9 @@ public class SequenceDecoder {
 		
 		// win or lose ... and done ;-)
 		start.done = true;
-		
-		if(start.routes.isEmpty()) {
-			start.routes = null;
-		}
-		
+
 		// notify solution
-		onPinValidated(start, resolution);
+		onPinValidated(start, resolution, optionOffset);
 	}
 	
 	/**
@@ -193,13 +213,13 @@ public class SequenceDecoder {
 	 * @param pin        a done pin determineValidRoutes
 	 * @param resolution given resolution of fullfillment
 	 */
-	protected void onPinValidated(Pin pin, Resolution resolution) {
+	protected void onPinValidated(Pin pin, Resolution resolution, int optionOffset) {
 		if(!sequence.donePins.contains(pin)) {
 			sequence.donePins.add(pin);
 		}
 		switch (resolution) {
 			case ALL_RESULTS:
-				if(isCompletedSequence()) {
+				if(isCompletedSequence() && sequence.donePins.size() >= sequence.predictedPins) {
 					notifySequenceDone();
 				}
 				break;
@@ -223,7 +243,7 @@ public class SequenceDecoder {
 	 * If all pins are tested, it will return true.
 	 */
 	private boolean isCompletedSequence() {
-		return sequence.donePins.size() == sequence.pins.length;
+		return sequence.donePins.size() >= sequence.pins.length;
 	}
 	
 	/**
@@ -242,20 +262,31 @@ public class SequenceDecoder {
 	 * Determine a valid, means untaken option from this pin, if the option isn't already in your route,
 	 * because each option is only allowed to be hit once a time in your route.
 	 *
-	 * @param current The pin to take a decission of.
+	 * @param current      The pin to take a decission of.
+	 * @param optionOffset
 	 * @return null means, no choice is available or already take in your current route.
 	 */
-	static List<Input> determineOptions(List<Input> current_route, Pin current) {
-		List<Input> option = new ArrayList<>();
+	static List<Input> determineOptions(List<Input> current_route, Pin current, int optionOffset) {
+		List<Input> options = new ArrayList<>();
 		for (Input input : current.getInput().getOptions()) {
 			// ungone und untaken
 			if(!current_route.contains(input) && !current.getTakenOptions().contains(input)) {
 				// can go
-				option.add(input);
-//				break;
+				options.add(input);
 			}
 		}
-		return option;
+		
+		// remove until option
+		for (int i = 0, j = 0; i < options.size(); i++) {
+			if(j < optionOffset) {
+				if(options.size() == 1) {
+					break;
+				}
+				j++;
+				options.remove(i--);
+			}
+		}
+		return options;
 	}
 	
 	/**
@@ -372,10 +403,11 @@ public class SequenceDecoder {
 	 */
 	static final class Sequence {
 		
-		final long  id;
-		final Pin[] pins;
+		final long id;
+		Pin[]     pins;
 		boolean   done;
 		List<Pin> donePins;
+		public long predictedPins;
 		
 		Sequence(long id, Pin[] pins) {
 			this.id = id;

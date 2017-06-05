@@ -21,7 +21,9 @@ public class SequenceDecoderTest {
 	public void test() {
 		SequenceDecoder decoder = new SequenceDecoder();
 		Input[]         fields  = defineFields(2, 2, 2, 2, 2);
-		decoder.setSequence(fields);
+		SequenceDecoder.Sequence sequence = decoder.setSequence(fields);
+		System.out.println(Arrays.toString(Arrays.stream(sequence.getPins()).mapToInt(p -> ((MoveInput) p.input).getMove()).toArray()));
+		System.out.println("");
 		
 		//noinspection MismatchedQueryAndUpdateOfCollection
 		List<int[]> results = new ArrayList<>();
@@ -53,10 +55,12 @@ public class SequenceDecoderTest {
 	public void test_all() {
 		SequenceDecoder decoder = new SequenceDecoder();
 		Input[]         fields  = defineFields(2, 2, 2, 2, 2);
-		decoder.setSequence(fields);
+		SequenceDecoder.Sequence sequence = decoder.setSequence(fields);
+		System.out.println(Arrays.toString(Arrays.stream(sequence.getPins()).mapToInt(p -> ((MoveInput) p.input).getMove()).toArray()));
+		System.out.println("");
 		
 		//noinspection MismatchedQueryAndUpdateOfCollection
-		List<int[]> results = new ArrayList<>();
+		List<List<Integer>> results = new ArrayList<>();
 		
 		// handle results
 		decoder.getDecodingCompletedEvent().addListener(sq -> {
@@ -68,10 +72,12 @@ public class SequenceDecoderTest {
 					MoveInput[] route = raw_route.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
 					
 					// recognize result
-					results.add(Arrays.stream(route).mapToInt(MoveInput::getIndex).toArray());
-					
-					// debug
-					System.out.println(Arrays.toString(route));
+					List<Integer> way = Arrays.stream(route).map(moveInput -> moveInput.getIndex()).collect(toList());
+					if(!results.contains(way)) {
+						results.add(way);
+						// debug
+						System.out.println(Arrays.toString(way.toArray()));
+					}
 				} else {
 					// debug
 					System.out.println("No result!");
@@ -120,7 +126,7 @@ public class SequenceDecoderTest {
 		}
 		
 		public int getIndex() {
-			return (int) getId();
+			return (int) getId() - 1;
 		}
 		
 		public int getMove() {
