@@ -83,13 +83,9 @@ public class SequenceDecoder {
 				do {
 					if(i > 0) {
 						pin = new Pin(pin.input);
-//						finalPins.add(pin);
 					}
 					solveFromPin(pin, resolution, i);
 					Pin finalPin = pin;
-//					if(sequence.donePins.stream().noneMatch(p -> p.input.equals(finalPin.input))) {
-//						sequence.donePins.add(pin);
-//					}
 					if(pin.route != null && pin.routes.stream().noneMatch(r -> r.equals(finalPin.route))) {
 						pin.routes.add(pin.route);
 					}
@@ -100,7 +96,6 @@ public class SequenceDecoder {
 				break;
 			}
 		}
-//		sequence.pins = finalPins.toArray(new Pin[0]);
 		return true;
 	}
 	

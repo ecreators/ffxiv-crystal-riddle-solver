@@ -1,5 +1,6 @@
 package de.easycreators.sequencer.decode.v2;
 
+import de.easycreators.sequencer.decode.model.Handler;
 import de.easycreators.sequencer.decode.model.Resolution;
 import de.easycreators.sequencer.decode.v2.SequenceDecoder.Input;
 import org.junit.Test;
@@ -26,28 +27,10 @@ public class SequenceDecoderTest {
 		System.out.println("");
 		
 		//noinspection MismatchedQueryAndUpdateOfCollection
-		List<int[]> results = new ArrayList<>();
+		List<List<Integer>> results = new ArrayList<>();
 		
 		// handle results
-		decoder.getDecodingCompletedEvent().addListener(sq -> {
-			// Auswertung
-			for (SequenceDecoder.Pin pin : sq.getDonePins()) {
-				List<Input> raw_route = pin.getRouteOrNull();
-				if(raw_route != null && !raw_route.isEmpty()) {
-					// cast
-					MoveInput[] route = raw_route.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
-					
-					// recognize result
-					results.add(Arrays.stream(route).mapToInt(MoveInput::getIndex).toArray());
-					
-					// debug
-					System.out.println(Arrays.toString(route));
-				} else {
-					// debug
-					System.out.println("No result!");
-				}
-			}
-		});
+		decoder.getDecodingCompletedEvent().addListener(new SequenceHandler(results));
 		decoder.decode(Resolution.EARLY_RESULT);
 	}
 	
@@ -63,27 +46,7 @@ public class SequenceDecoderTest {
 		List<List<Integer>> results = new ArrayList<>();
 		
 		// handle results
-		decoder.getDecodingCompletedEvent().addListener(sq -> {
-			// Auswertung
-			for (SequenceDecoder.Pin pin : sq.getDonePins()) {
-				List<Input> raw_route = pin.getRouteOrNull();
-				if(raw_route != null && !raw_route.isEmpty()) {
-					// cast
-					MoveInput[] route = raw_route.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
-					
-					// recognize result
-					List<Integer> way = Arrays.stream(route).map(moveInput -> moveInput.getIndex()).collect(toList());
-					if(!results.contains(way)) {
-						results.add(way);
-						// debug
-						System.out.println(Arrays.toString(way.toArray()));
-					}
-				} else {
-					// debug
-					System.out.println("No result!");
-				}
-			}
-		});
+		decoder.getDecodingCompletedEvent().addListener(new SequenceHandler(results));
 		decoder.decode(Resolution.ALL_RESULTS);
 	}
 	
@@ -141,6 +104,37 @@ public class SequenceDecoderTest {
 		@Override
 		public int hashCode() {
 			return (int) getId();
+		}
+	}
+	
+	private static class SequenceHandler implements Handler<SequenceDecoder.Sequence> {
+		private final List<List<Integer>> results;
+		
+		public SequenceHandler(List<List<Integer>> results) {
+			this.results = results;
+		}
+		
+		@Override
+		public void invoke(SequenceDecoder.Sequence sq) {
+			// Auswertung
+			for (SequenceDecoder.Pin pin : sq.getDonePins()) {
+				List<Input> raw_route = pin.getRouteOrNull();
+				if(raw_route != null && !raw_route.isEmpty()) {
+					// cast
+					MoveInput[] route = raw_route.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
+					
+					// recognize result
+					List<Integer> way = Arrays.stream(route).map(moveInput -> moveInput.getIndex()).collect(toList());
+					if(!results.contains(way)) {
+						results.add(way);
+						// debug
+						System.out.println(Arrays.toString(way.toArray()));
+					}
+				} else {
+					// debug
+					System.out.println("No result!");
+				}
+			}
 		}
 	}
 }
