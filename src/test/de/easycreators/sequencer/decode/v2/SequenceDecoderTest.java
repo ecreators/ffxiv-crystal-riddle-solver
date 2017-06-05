@@ -14,6 +14,7 @@ import static java.util.stream.Collectors.toList;
 /**
  * @author Bjoern Frohberg, mydata GmbH
  */
+@SuppressWarnings("ALL")
 public class SequenceDecoderTest {
 	
 	@Test
@@ -46,6 +47,38 @@ public class SequenceDecoderTest {
 			}
 		});
 		decoder.decode(Resolution.EARLY_RESULT);
+	}
+	
+	@Test
+	public void test_all() {
+		SequenceDecoder decoder = new SequenceDecoder();
+		Input[]         fields  = defineFields(2, 2, 2, 2, 2);
+		decoder.setSequence(fields);
+		
+		//noinspection MismatchedQueryAndUpdateOfCollection
+		List<int[]> results = new ArrayList<>();
+		
+		// handle results
+		decoder.getDecodingCompletedEvent().addListener(sq -> {
+			// Auswertung
+			for (SequenceDecoder.Pin pin : sq.getDonePins()) {
+				List<Input> raw_route = pin.getRouteOrNull();
+				if(raw_route != null && !raw_route.isEmpty()) {
+					// cast
+					MoveInput[] route = raw_route.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
+					
+					// recognize result
+					results.add(Arrays.stream(route).mapToInt(MoveInput::getIndex).toArray());
+					
+					// debug
+					System.out.println(Arrays.toString(route));
+				} else {
+					// debug
+					System.out.println("No result!");
+				}
+			}
+		});
+		decoder.decode(Resolution.ALL_RESULTS);
 	}
 	
 	private static Input[] defineFields(int... moves) {

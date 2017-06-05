@@ -1,14 +1,22 @@
 package de.easycreators.sequencer.decode.v2;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import de.easycreators.core.event.IListenerEvent;
 import de.easycreators.core.event.ListenerEvent;
 import de.easycreators.sequencer.decode.model.Handler;
 import de.easycreators.sequencer.decode.model.Resolution;
 
+import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toList;
 
 /**
  * @author Bjoern Frohberg, mydata GmbH
@@ -32,13 +40,14 @@ public class SequenceDecoder {
 	 * Set a chosen given sequence of options with different ids and given options to continue the journey.
 	 * So, ensure your pins have options to choose a next option pin.
 	 */
-	public void setSequence(Input... pins) {
+	public Sequence setSequence(Input... pins) {
 		Pin[] sequence = new Pin[pins.length];
 		for (int i = 0; i < pins.length; i++) {
 			Input pin = pins[i];
 			sequence[i] = new Pin(pin);
 		}
 		this.sequence = new Sequence(System.currentTimeMillis(), sequence);
+		return this.sequence;
 	}
 	
 	/**
@@ -59,11 +68,12 @@ public class SequenceDecoder {
 			return true;
 		}
 		
-		// test each pin
+		// determineValidRoutes each pin
 		for (Pin pin : sequence.getPins()) {
 			// stop asap with resolution EARLY, if a route was found
 			if(resolution != Resolution.EARLY_RESULT || !hasRouteFound()) {
-				solveFromPin(sequence, pin, resolution);
+				// one solution a pin
+				solveFromPin(pin, resolution);
 			}
 			// early stop
 			else {
@@ -74,53 +84,67 @@ public class SequenceDecoder {
 	}
 	
 	/**
-	 * @param sender     Solution to hold completion state and all pins
 	 * @param start      Pin to hold completion state of tested start and previous routed pin and taken option
 	 *                   each step in way finding
 	 * @param resolution Kind of stop type to reduce redundant iterations
 	 */
-	protected void solveFromPin(Sequence sender, Pin start, Resolution resolution) {
-		// if started asnchron or parallel: stop this test, if another test found a route
+	protected void solveFromPin(Pin start, Resolution resolution) {
+		// if started asnchron or parallel: stop this determineValidRoutes, if another determineValidRoutes found a route
 		if(shouldStop(resolution)) {
 			return;
 		}
 		
 		// reset this pin
-		start.done = false;
 		start.route = null;
-		start.previous = null;
-		start.takenInputs.clear();
+		sequence.reset();
 		
-		// solved matching route in a varable state until pin.done=true
+		Pin current = start;
 		List<Input> current_route = new ArrayList<>();
-		Pin         current       = start;
+		
+		outer:
 		do {
 			// mark this pin as taken and anymore available for further options
-			current_route.add(current.getInput());
+			if(!current_route.contains(current.getInput())) {
+				current_route.add(current.getInput());
+			}
 			
-			// test: sequence complete
-			if(current_route.size() == sender.getPins().length) {
+			// determineValidRoutes: sequence complete
+			if(current_route.size() == sequence.getPins().length) {
 				// no further route when already a route was set
 				if(shouldStop(resolution)) {
-					return;
+					current_route.clear();
+					break; // do
 				}
 				// solved solution from this
 				start.route = Collections.unmodifiableList(current_route);
+				if(!start.routes.contains(start.route)) {
+					start.routes.add(start.route);
+				}
 				// start.done = true; <- required after "break do"
 				// win and exit
-				break;
+				break; // do
 			}
 			
 			// where to go from this pin
-			Input option = determineOption(current_route, current);
-			// has option
-			if(option != null) {
-				current.getTakenInputs().add(option);
-				// go there
-				Pin old = current;
-				current = sender.asPinOrDie(option);
-				current.previous = old;
-				// continue "further"
+			List<Input> unchosenOptions = determineOptions(current_route, current);
+			// more than one option produce a new possible destiny
+			if(!unchosenOptions.isEmpty()) {
+				for (Input option : unchosenOptions) {
+					// has option
+					current.getTakenOptions().add(option);
+					// go there
+					Pin option_pin = sequence.asPinOrDie(option);
+					Pin old        = current;
+					current = option_pin;
+					current.previous = old;
+					// continue "further"
+					
+					// determineValidRoutes: another pin was already solved
+					if(shouldStop(resolution)) {
+						current_route.clear();
+						break outer; // do
+					}
+				}
 			}
 			// no option anymore
 			else {
@@ -128,15 +152,23 @@ public class SequenceDecoder {
 				revertPin(current, current_route);
 				current = current.getPrevious();
 				// continue "backwards"
+				
+				// determineValidRoutes: another pin was already solved
+				if(shouldStop(resolution)) {
+					current_route.clear();
+					break; // do
+				}
 			}
 			
-			// test: another pin was already solved
-			if(shouldStop(resolution)) {
-				return;
-			}
 		} while (current != null);
+		
 		// win or lose ... and done ;-)
 		start.done = true;
+		
+		if(start.routes.isEmpty()) {
+			start.routes = null;
+		}
+		
 		// notify solution
 		onPinValidated(start, resolution);
 	}
@@ -149,7 +181,7 @@ public class SequenceDecoder {
 	}
 	
 	/**
-	 * Returns true, if any pin of done test has a valid route.
+	 * Returns true, if any pin of done determineValidRoutes has a valid route.
 	 */
 	public boolean hasRouteFound() {
 		return sequence.done && sequence.getDonePins().stream().anyMatch(Pin::isSuccess);
@@ -158,7 +190,7 @@ public class SequenceDecoder {
 	/**
 	 * Notifies a working start pin, at end using ALL or asap using EARLY if a working pin is given
 	 *
-	 * @param pin        a done pin test
+	 * @param pin        a done pin determineValidRoutes
 	 * @param resolution given resolution of fullfillment
 	 */
 	protected void onPinValidated(Pin pin, Resolution resolution) {
@@ -202,7 +234,7 @@ public class SequenceDecoder {
 	 *                      or your route will be inconsequent and unform.
 	 */
 	static void revertPin(Pin current, List<Input> current_route) {
-		current.getTakenInputs().clear();
+		current.getTakenOptions().clear();
 		current_route.remove(current.getInput());
 	}
 	
@@ -213,14 +245,14 @@ public class SequenceDecoder {
 	 * @param current The pin to take a decission of.
 	 * @return null means, no choice is available or already take in your current route.
 	 */
-	static Input determineOption(List<Input> current_route, Pin current) {
-		Input option = null;
+	static List<Input> determineOptions(List<Input> current_route, Pin current) {
+		List<Input> option = new ArrayList<>();
 		for (Input input : current.getInput().getOptions()) {
 			// ungone und untaken
-			if(!current_route.contains(input) && !current.getTakenInputs().contains(input)) {
+			if(!current_route.contains(input) && !current.getTakenOptions().contains(input)) {
 				// can go
-				option = input;
-				break;
+				option.add(input);
+//				break;
 			}
 		}
 		return option;
@@ -231,19 +263,23 @@ public class SequenceDecoder {
 	 */
 	public static class Pin {
 		
-		private final Input       input;
-		private final List<Input> takenInputs;
-		private       Pin         previous;
-		boolean     done;
-		List<Input> route;
+		Input             input;
+		List<Input>       takenOptions;
+		Pin               previous;
+		boolean           done;
+		List<Input>       route;
+		List<List<Input>> routes;
 		
 		public Pin(Input input) {
 			this.input = input;
-			this.takenInputs = new ArrayList<>();
+			this.takenOptions = new ArrayList<>();
+			this.routes = new ArrayList<>();
 		}
 		
 		public final List<Input> getRouteOrNull() {
-			return route;
+			return route == null || route.isEmpty()
+			       ? null
+			       : route;
 		}
 		
 		final Pin getPrevious() {
@@ -254,27 +290,48 @@ public class SequenceDecoder {
 			return input;
 		}
 		
-		List<Input> getTakenInputs() {
-			return takenInputs;
+		List<Input> getTakenOptions() {
+			return takenOptions;
 		}
 		
 		public final boolean isSuccess() {
 			List<Input> route = this.route;
 			return route != null && !route.isEmpty();
 		}
+		
+		public final void reset() {
+			done = false;
+			previous = null;
+			takenOptions.clear();
+		}
+		
+		public Pin cloneThis() {
+			try {
+				ObjectMapper mapper = new ObjectMapper();
+				String       json   = mapper.writeValueAsString(this);
+				return mapper.readValue(json, getClass());
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}
 	}
 	
 	
 	/**
-	 * Defines your possible input you want to test. All options need to be set before decode. If no
+	 * Defines your possible input you want to determineValidRoutes. All options need to be set before decode. If no
 	 * option can be determine, then it inflicts to use the caller input to determine a different
 	 * way to reach the decoding, if possible.
 	 */
 	@SuppressWarnings("unused")
 	public static class Input {
 		
-		private final List<Input> options;
-		private       long        id;
+		@JsonProperty
+		private List<Input> options;
+		@JsonProperty
+		private long        id;
+		
+		public Input() {
+		}
 		
 		public Input(long id) {
 			this.id = id;
@@ -338,6 +395,29 @@ public class SequenceDecoder {
 		
 		Pin asPinOrDie(Input option) {
 			return Arrays.stream(pins).filter(p -> p.getInput().equals(option)).findFirst().orElseThrow(() -> new RuntimeException("pin not found for " + option.getId()));
+		}
+		
+		public final List<List<Input>> collectRoutes() {
+			return donePins.stream().filter(Pin::isSuccess).map(Pin::getRouteOrNull).collect(toList());
+		}
+		
+		public <T> List<T[]> collectRouteType(Function<Input, T> mapper) {
+			return collectRoutes().stream().map((List<Input> list) -> {
+				List<T> mapped = list.stream().map(mapper).collect(Collectors.toList());
+				T       dummy  = mapped.stream().findFirst().orElse(null);
+				if(dummy != null) {
+					return mapped.toArray((T[]) Array.newInstance(dummy.getClass(), 0));
+				}
+				return Sequence.<T>emptyArray();
+			}).collect(toList());
+		}
+		
+		public static <T> T[] emptyArray() {
+			return (T[]) Array.newInstance(Object.class, 0);
+		}
+		
+		public void reset() {
+			Arrays.stream(pins).forEach(Pin::reset);
 		}
 	}
 }
