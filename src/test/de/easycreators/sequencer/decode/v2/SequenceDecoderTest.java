@@ -29,7 +29,7 @@ public class SequenceDecoderTest {
 		decoder.getDecodingCompletedEvent().addListener(sq -> {
 			// Auswertung
 			for (SequenceDecoder.Pin pin : sq.getDonePins()) {
-				List<Input> raw_route = pin.getRoute();
+				List<Input> raw_route = pin.getRouteOrNull();
 				if(raw_route != null && !raw_route.isEmpty()) {
 					// cast
 					MoveInput[] route = raw_route.stream().map(i -> (MoveInput) i).collect(toList()).toArray(new MoveInput[0]);
