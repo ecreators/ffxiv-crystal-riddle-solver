@@ -41,12 +41,23 @@ public class SequenceDecoder {
 	 * So, ensure your pins have options to choose a next option pin.
 	 */
 	public Sequence setSequence(Input... pins) {
-		Pin[] sequence = new Pin[pins.length];
+		Pin[] sequence  = new Pin[pins.length];
+		int   predicted = 0;
 		for (int i = 0; i < pins.length; i++) {
 			Input pin = pins[i];
+			// der Pin selbst
+			for (Input option : pin.options) {
+				predicted++;
+			}
+			if(!pin.options.isEmpty()) {
+				predicted--;
+			} else {
+				predicted++;
+			}
 			sequence[i] = new Pin(pin);
 		}
 		this.sequence = new Sequence(System.currentTimeMillis(), sequence);
+		this.sequence.predictedPins = predicted;
 		return this.sequence;
 	}
 	
@@ -60,43 +71,14 @@ public class SequenceDecoder {
 	 *                   start up with each of input of 2 to solve a sequence.
 	 */
 	@SuppressWarnings("UnusedReturnValue")
-	public boolean decode(Resolution resolution) {
+	public DecodeStrategy decode(Resolution resolution) {
 		if(sequence == null) {
-			return false;
+			return null;
 		} else if(sequence.done) {
 			notifySequenceDone();
-			return true;
+			return new DecodeStrategy(sequence, resolution);
 		}
-		
-		sequence.predictedPins = 0;
-		for (Pin pin : sequence.getPins()) {
-			for (Input ignored : pin.input.options) {
-				sequence.predictedPins++;
-			}
-		}
-		
-		for (Pin pin : sequence.getPins()) {
-			// stop asap with resolution EARLY, if a route was found
-			if(resolution != Resolution.EARLY_RESULT || !hasRouteFound()) {
-				// one solution a pin
-				int i = 0;
-				do {
-					if(i > 0) {
-						pin = new Pin(pin.input);
-					}
-					solveFromPin(pin, resolution, i);
-					Pin finalPin = pin;
-					if(pin.route != null && pin.routes.stream().noneMatch(r -> r.equals(finalPin.route))) {
-						pin.routes.add(pin.route);
-					}
-				} while (i++ < pin.input.options.size());
-			}
-			// early stop
-			else {
-				break;
-			}
-		}
-		return true;
+		return new DecodeStrategy(sequence, resolution);
 	}
 	
 	/**
@@ -183,7 +165,7 @@ public class SequenceDecoder {
 		
 		// win or lose ... and done ;-)
 		start.done = true;
-
+		
 		// notify solution
 		onPinValidated(start, resolution, optionOffset);
 	}
@@ -445,6 +427,83 @@ public class SequenceDecoder {
 		
 		public void reset() {
 			Arrays.stream(pins).forEach(Pin::reset);
+		}
+	}
+	
+	public final class DecodeStrategy {
+		
+		private final Sequence sequence;
+		private final Resolution resolution;
+		
+		public DecodeStrategy() {
+			this(null, Resolution.EARLY_RESULT);
+		}
+		
+		public DecodeStrategy(Sequence sequence, Resolution resolution) {
+			this.sequence = sequence;
+			this.resolution = resolution;
+		}
+		
+		public void begin() {
+			for (Pin pin : sequence.getPins()) {
+				// stop asap with resolution EARLY, if a route was found
+				if(resolution != Resolution.EARLY_RESULT || !hasRouteFound()) {
+					// one solution a pin
+					int i = 0;
+					do {
+						if(i > 0) {
+							pin = new Pin(pin.input);
+						}
+						solveFromPin(pin, resolution, i);
+						Pin finalPin = pin;
+						if(pin.route != null && pin.routes.stream().noneMatch(r -> r.equals(finalPin.route))) {
+							pin.routes.add(pin.route);
+						}
+					} while (i++ < pin.input.options.size());
+				}
+				// early stop
+				else {
+					break;
+				}
+			}
+		}
+		
+		public List<List<Input>> execute() {
+			List<List<Input>> results = new ArrayList<>();
+			getDecodingCompletedEvent().addListener(new SequenceHandler(results));
+			begin();
+			return results;
+		}
+	}
+	
+	private static class SequenceHandler implements Handler<SequenceDecoder.Sequence> {
+		private final List<List<Input>> results;
+		
+		public SequenceHandler(List<List<Input>> results) {
+			this.results = results;
+		}
+		
+		@Override
+		public void invoke(SequenceDecoder.Sequence sq) {
+			// Auswertung
+			for (SequenceDecoder.Pin pin : sq.getDonePins()) {
+				List<Input> raw_route = pin.getRouteOrNull();
+				if(raw_route != null && !raw_route.isEmpty()) {
+					// cast
+					
+					List<Input> route = new ArrayList<>(raw_route);
+					
+					// recognize result
+					if(!results.contains(route)) {
+						results.add(route);
+						// debug
+						System.out.println(Arrays.toString(route.toArray()));
+					}
+				} else {
+					// debug
+					System.out.println("No result!");
+				}
+			}
 		}
 	}
 }

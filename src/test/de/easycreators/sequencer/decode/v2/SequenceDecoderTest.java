@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toList;
 
@@ -20,25 +21,35 @@ public class SequenceDecoderTest {
 	
 	@Test
 	public void test() {
-		SequenceDecoder decoder = new SequenceDecoder();
-		Input[]         fields  = defineFields(2, 2, 2, 2, 2);
+		SequenceDecoder          decoder  = new SequenceDecoder();
+		Input[]                  fields   = defineFields(2, 2, 2, 2, 2);
 		SequenceDecoder.Sequence sequence = decoder.setSequence(fields);
 		System.out.println(Arrays.toString(Arrays.stream(sequence.getPins()).mapToInt(p -> ((MoveInput) p.input).getMove()).toArray()));
 		System.out.println("");
+
+//		// A) do this
+//		//noinspection MismatchedQueryAndUpdateOfCollection
+//		List<List<Integer>> results = new ArrayList<>();
+//
+//		// handle results
+//		decoder.getDecodingCompletedEvent().addListener(new SequenceHandler(results));
+//		decoder.decode(Resolution.EARLY_RESULT).begin();
 		
-		//noinspection MismatchedQueryAndUpdateOfCollection
-		List<List<Integer>> results = new ArrayList<>();
-		
-		// handle results
-		decoder.getDecodingCompletedEvent().addListener(new SequenceHandler(results));
-		decoder.decode(Resolution.EARLY_RESULT);
+		// B) or this
+		List<List<Integer>> routes = decoder.decode(Resolution.EARLY_RESULT).execute()
+		                                    .stream()
+		                                    .map(in -> in.stream()
+		                                                 .map(i -> new Integer((int) i.getId() - 1))
+		                                                 .collect(Collectors.toList()))
+		                                    .collect(Collectors.toList());
 	}
 	
 	@Test
 	public void test_all() {
-		SequenceDecoder decoder = new SequenceDecoder();
-		Input[]         fields  = defineFields(2, 2, 2, 2, 2);
+		SequenceDecoder          decoder  = new SequenceDecoder();
+		Input[]                  fields   = defineFields(2, 2, 2, 2, 2);
 		SequenceDecoder.Sequence sequence = decoder.setSequence(fields);
+		
 		System.out.println(Arrays.toString(Arrays.stream(sequence.getPins()).mapToInt(p -> ((MoveInput) p.input).getMove()).toArray()));
 		System.out.println("");
 		
